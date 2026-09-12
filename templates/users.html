@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Users{% endblock %}
+{% block content %}
+<h2>Registered Users</h2>
+
+<table class="data-table">
+    <thead>
+        <tr><th>Name</th><th>Roll No</th><th>Email</th><th>Registered On</th><th></th></tr>
+    </thead>
+    <tbody>
+        {% for u in users %}
+        <tr>
+            <td>{{ u.name }}</td>
+            <td>{{ u.roll_no }}</td>
+            <td>{{ u.email or '-' }}</td>
+            <td>{{ u.registered_on }}</td>
+            <td>
+                <form method="POST" action="{{ url_for('delete_user', user_id=u.id) }}"
+                      onsubmit="return confirm('Delete this user?');">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5">No users registered yet.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Take Attendance{% endblock %}
+{% block content %}
+<h2>Live Attendance</h2>
+<p class="hint">Recognized faces are marked automatically. Green = just marked, orange = already marked this session.</p>
+
+<div class="video-wrap">
+    <img src="{{ url_for('video_feed') }}" alt="Live camera feed">
+</div>
+
+<a href="{{ url_for('dashboard') }}" class="btn">Stop &amp; Back to Dashboard</a>
+{% endblock %}

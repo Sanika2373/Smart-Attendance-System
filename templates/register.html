@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Register User{% endblock %}
+{% block content %}
+<h2>Register New User</h2>
+<div class="auth-box">
+    <form method="POST">
+        <label>Full Name</label>
+        <input type="text" name="name" required>
+
+        <label>Roll No / Employee ID</label>
+        <input type="text" name="roll_no" required>
+
+        <label>Email (optional)</label>
+        <input type="email" name="email">
+
+        <p class="hint">
+            Clicking "Start Capture" opens a webcam window on this server's machine.
+            Look at the camera and slowly turn your head slightly left/right/up/down
+            until the sample count reaches the target. Press "q" to stop early.
+        </p>
+
+        <button type="submit" class="btn btn-primary">Start Capture &amp; Register</button>
+    </form>
+</div>
+{% endblock %}

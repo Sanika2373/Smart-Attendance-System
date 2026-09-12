@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+.env
+instance/*.db
+static/faces/*
+!static/faces/.gitkeep
