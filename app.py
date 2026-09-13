@@ -1,13 +1,15 @@
 import os
 import io
+import base64
 from datetime import datetime, timedelta
 from functools import wraps
 
 import cv2
+import numpy as np
 import pandas as pd
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    session, flash, Response, send_file
+    session, flash, Response, send_file, jsonify
 )
 
 from config import Config
@@ -113,7 +115,8 @@ def register():
 
 def gen_attendance_frames():
     """Video stream generator: reads webcam, recognizes faces, marks attendance,
-    and yields annotated JPEG frames for the browser <img> tag."""
+    and yields annotated JPEG frames for the browser <img> tag.
+    NOTE: kept for local/legacy use only — not used by the deployed site anymore."""
     with app.app_context():
         users = User.query.all()
         known_encodings, known_ids = load_known_encodings(users)
@@ -160,8 +163,71 @@ def gen_attendance_frames():
 @app.route("/video_feed")
 @login_required
 def video_feed():
+    # NOTE: this only works when the Flask server itself has a webcam attached
+    # (i.e. running locally with `python app.py`). It will NOT work on Render
+    # or any cloud host, since cloud servers have no physical camera.
     return Response(gen_attendance_frames(),
                      mimetype="multipart/x-mixed-replace; boundary=frame")
+
+
+@app.route("/api/recognize_frame", methods=["POST"])
+@login_required
+def recognize_frame():
+    """
+    Browser-camera-based recognition (works both locally AND on a deployed
+    server like Render, since the camera runs in the USER'S browser, not
+    on the server). The browser sends one JPEG frame at a time as base64;
+    this route decodes it, runs recognition, marks attendance, and returns
+    JSON describing any recognized faces + their box coordinates so the
+    browser can draw them on screen.
+    """
+    data = request.get_json(silent=True) or {}
+    image_data_url = data.get("image", "")
+
+    if "," not in image_data_url:
+        return jsonify({"error": "No image received"}), 400
+
+    # Strip the "data:image/jpeg;base64," prefix and decode
+    header, encoded = image_data_url.split(",", 1)
+    try:
+        img_bytes = base64.b64decode(encoded)
+        np_arr = np.frombuffer(img_bytes, np.uint8)
+        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    except Exception:
+        return jsonify({"error": "Could not decode image"}), 400
+
+    if frame is None:
+        return jsonify({"error": "Empty frame"}), 400
+
+    users = User.query.all()
+    known_encodings, known_ids = load_known_encodings(users)
+    id_to_name = {u.id: u.name for u in users}
+
+    tolerance = app.config["RECOGNITION_TOLERANCE"]
+    cooldown = timedelta(hours=app.config["ATTENDANCE_COOLDOWN_HOURS"])
+    matches = recognize_face(frame, known_encodings, known_ids, tolerance)
+
+    results = []
+    for user_id, (top, right, bottom, left), confidence in matches:
+        now = datetime.utcnow()
+        last_time = _last_marked.get(user_id)
+
+        if last_time is None or (now - last_time) > cooldown:
+            db.session.add(Attendance(user_id=user_id))
+            db.session.commit()
+            _last_marked[user_id] = now
+            status = "marked"
+        else:
+            status = "already_marked"
+
+        results.append({
+            "name": id_to_name.get(user_id, "Unknown"),
+            "confidence": confidence,
+            "status": status,
+            "box": {"top": top, "right": right, "bottom": bottom, "left": left},
+        })
+
+    return jsonify({"faces": results})
 
 
 @app.route("/take_attendance")

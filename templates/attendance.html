@@ -2,11 +2,99 @@
 {% block title %}Take Attendance{% endblock %}
 {% block content %}
 <h2>Live Attendance</h2>
-<p class="hint">Recognized faces are marked automatically. Green = just marked, orange = already marked this session.</p>
+<p class="hint">
+    This uses YOUR device's camera (works on the deployed site from any
+    phone/laptop). Allow camera access when the browser asks. Recognized
+    faces are marked automatically — green = just marked, orange = already
+    marked this session.
+</p>
 
-<div class="video-wrap">
-    <img src="{{ url_for('video_feed') }}" alt="Live camera feed">
+<div class="video-wrap" style="position: relative;">
+    <video id="cam" autoplay playsinline muted style="width: 100%; display: block;"></video>
+    <canvas id="overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></canvas>
 </div>
 
+<p id="status-text" class="hint">Starting camera…</p>
+
 <a href="{{ url_for('dashboard') }}" class="btn">Stop &amp; Back to Dashboard</a>
+
+<canvas id="capture-canvas" style="display:none;"></canvas>
+
+<script>
+const video = document.getElementById("cam");
+const overlay = document.getElementById("overlay");
+const overlayCtx = overlay.getContext("2d");
+const captureCanvas = document.getElementById("capture-canvas");
+const statusText = document.getElementById("status-text");
+
+let sending = false;
+
+async function startCamera() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+            overlay.width = video.videoWidth;
+            overlay.height = video.videoHeight;
+            captureCanvas.width = video.videoWidth;
+            captureCanvas.height = video.videoHeight;
+            statusText.textContent = "Camera live — looking for faces…";
+            setInterval(captureAndSend, 2000);  // send a frame every 2 seconds
+        };
+    } catch (err) {
+        statusText.textContent = "Could not access camera: " + err.message;
+    }
+}
+
+function captureAndSend() {
+    if (sending) return;  // skip if a previous request is still processing
+    sending = true;
+
+    const ctx = captureCanvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+    const imageDataUrl = captureCanvas.toDataURL("image/jpeg", 0.7);
+
+    fetch("{{ url_for('recognize_frame') }}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: imageDataUrl })
+    })
+        .then(res => res.json())
+        .then(data => {
+            drawResults(data.faces || []);
+            sending = false;
+        })
+        .catch(err => {
+            statusText.textContent = "Error: " + err.message;
+            sending = false;
+        });
+}
+
+function drawResults(faces) {
+    overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+
+    if (faces.length === 0) {
+        statusText.textContent = "Camera live — looking for faces…";
+        return;
+    }
+
+    faces.forEach(face => {
+        const { top, right, bottom, left } = face.box;
+        const color = face.status === "marked" ? "#00c800" : "#ffa500";
+        const label = `${face.name} - ${face.status === "marked" ? "Marked" : "Already marked"} (${face.confidence}%)`;
+
+        overlayCtx.strokeStyle = color;
+        overlayCtx.lineWidth = 3;
+        overlayCtx.strokeRect(left, top, right - left, bottom - top);
+
+        overlayCtx.fillStyle = color;
+        overlayCtx.font = "16px Arial";
+        overlayCtx.fillText(label, left, top - 8 > 10 ? top - 8 : top + 20);
+    });
+
+    statusText.textContent = faces.map(f => `${f.name} (${f.status === "marked" ? "marked" : "already marked"})`).join(", ");
+}
+
+startCamera();
+</script>
 {% endblock %}
