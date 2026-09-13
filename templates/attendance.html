@@ -16,9 +16,37 @@
 
 <p id="status-text" class="hint">Starting camera…</p>
 
+<div id="toast" class="toast"></div>
+
 <a href="{{ url_for('dashboard') }}" class="btn">Stop &amp; Back to Dashboard</a>
 
 <canvas id="capture-canvas" style="display:none;"></canvas>
+
+<style>
+.toast {
+    position: fixed;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    padding: 14px 26px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 1rem;
+    color: #fff;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    z-index: 1000;
+    white-space: nowrap;
+}
+.toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+.toast.success { background: #16a34a; }
+.toast.info { background: #d97706; }
+</style>
 
 <script>
 const video = document.getElementById("cam");
@@ -26,8 +54,23 @@ const overlay = document.getElementById("overlay");
 const overlayCtx = overlay.getContext("2d");
 const captureCanvas = document.getElementById("capture-canvas");
 const statusText = document.getElementById("status-text");
+const toast = document.getElementById("toast");
 
 let sending = false;
+let toastTimer = null;
+// remembers which names we've already shown a toast for recently,
+// so the popup doesn't spam every 2 seconds for the same person
+const recentlyToasted = {};
+const TOAST_REPEAT_GAP_MS = 8000;
+
+function showToast(message, type) {
+    clearTimeout(toastTimer);
+    toast.textContent = message;
+    toast.className = "toast show " + type;
+    toastTimer = setTimeout(() => {
+        toast.className = "toast " + type;
+    }, 3000);
+}
 
 async function startCamera() {
     try {
@@ -78,10 +121,11 @@ function drawResults(faces) {
         return;
     }
 
+    const now = Date.now();
+
     faces.forEach(face => {
         const { top, right, bottom, left } = face.box;
         const color = face.status === "marked" ? "#00c800" : "#ffa500";
-        const label = `${face.name} - ${face.status === "marked" ? "Marked" : "Already marked"} (${face.confidence}%)`;
 
         overlayCtx.strokeStyle = color;
         overlayCtx.lineWidth = 3;
@@ -89,10 +133,22 @@ function drawResults(faces) {
 
         overlayCtx.fillStyle = color;
         overlayCtx.font = "16px Arial";
-        overlayCtx.fillText(label, left, top - 8 > 10 ? top - 8 : top + 20);
+        overlayCtx.fillText(face.name, left, top - 8 > 10 ? top - 8 : top + 20);
+
+        // Show a popup message, but not more than once every few seconds
+        // for the same person (otherwise it would pop up every 2 seconds)
+        const lastToast = recentlyToasted[face.name] || 0;
+        if (now - lastToast > TOAST_REPEAT_GAP_MS) {
+            recentlyToasted[face.name] = now;
+            if (face.status === "marked") {
+                showToast(`✅ ${face.name} — Attendance Marked Successfully`, "success");
+            } else {
+                showToast(`⚠ ${face.name} — Already Marked Attendance`, "info");
+            }
+        }
     });
 
-    statusText.textContent = faces.map(f => `${f.name} (${f.status === "marked" ? "marked" : "already marked"})`).join(", ");
+    statusText.textContent = faces.map(f => f.name).join(", ") + " detected";
 }
 
 startCamera();

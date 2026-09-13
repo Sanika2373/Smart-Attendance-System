@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Reports{% endblock %}
 {% block content %}
-<h2>Attendance Report</h2>
+<h2><i class="fa-solid fa-chart-column" style="color: var(--primary);"></i> Attendance Report</h2>
 
 <form method="GET" class="filter-form">
-    <label>Filter by date:</label>
+    <label style="margin: 0;">Filter by date:</label>
     <input type="date" name="date" value="{{ date_filter or '' }}">
-    <button type="submit" class="btn">Filter</button>
+    <button type="submit" class="btn"><i class="fa-solid fa-filter"></i> Filter</button>
     <a href="{{ url_for('report') }}" class="btn">Clear</a>
-    <a href="{{ url_for('export_report') }}" class="btn btn-primary">⬇ Export CSV</a>
+    <a href="{{ url_for('export_report') }}" class="btn btn-primary"><i class="fa-solid fa-download"></i> Export CSV</a>
 </form>
 
 <table class="data-table">
@@ -22,7 +22,7 @@
             <td>{{ r.roll_no }}</td>
             <td>{{ r.date }}</td>
             <td>{{ r.time_in }}</td>
-            <td><span class="badge">{{ r.status }}</span></td>
+            <td><span class="badge"><i class="fa-solid fa-check"></i> {{ r.status }}</span></td>
         </tr>
         {% else %}
         <tr><td colspan="5">No records found.</td></tr>

@@ -14,7 +14,10 @@ from flask import (
 
 from config import Config
 from models import db, User, Attendance
-from modules.face_utils import capture_samples, generate_encoding, load_known_encodings, recognize_face
+from modules.face_utils import (
+    capture_samples, generate_encoding, generate_encoding_from_frames,
+    load_known_encodings, recognize_face, find_duplicate_face
+)
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -64,51 +67,108 @@ def logout():
 def dashboard():
     total_users = User.query.count()
     today = datetime.utcnow().date()
-    today_count = Attendance.query.filter_by(date=today).count()
+    present_user_ids = {
+        row[0] for row in db.session.query(Attendance.user_id)
+        .filter(Attendance.date == today).distinct().all()
+    }
+    today_count = len(present_user_ids)
+    absent_count = total_users - today_count
     recent = Attendance.query.order_by(Attendance.time_in.desc()).limit(10).all()
     return render_template(
         "dashboard.html",
         total_users=total_users,
         today_count=today_count,
+        absent_count=absent_count,
         recent=[a.to_dict() for a in recent],
     )
 
 
 # ---------- Registration ----------
 
-@app.route("/register", methods=["GET", "POST"])
+@app.route("/register")
 @login_required
 def register():
-    if request.method == "POST":
-        name = request.form.get("name")
-        roll_no = request.form.get("roll_no")
-        email = request.form.get("email")
-
-        if User.query.filter_by(roll_no=roll_no).first():
-            flash("A user with this roll number already exists.", "error")
-            return redirect(url_for("register"))
-
-        save_dir = os.path.join(app.config["FACES_DIR"], roll_no)
-        # opens a local webcam window on the machine running this server
-        image_paths = capture_samples(roll_no, save_dir, app.config["SAMPLES_PER_USER"])
-
-        if not image_paths:
-            flash("No face samples captured. Try again with better lighting.", "error")
-            return redirect(url_for("register"))
-
-        encoding = generate_encoding(image_paths)
-        if encoding is None:
-            flash("Could not generate a face encoding from the captured images.", "error")
-            return redirect(url_for("register"))
-
-        user = User(name=name, roll_no=roll_no, email=email, encoding=encoding)
-        db.session.add(user)
-        db.session.commit()
-
-        flash(f"{name} registered successfully with {len(image_paths)} samples.", "success")
-        return redirect(url_for("dashboard"))
-
+    # Registration now happens entirely via the browser's camera (see
+    # register.html + /api/register_user below), so this route just
+    # renders the page. Works identically on localhost and on the
+    # deployed site, from a laptop or a phone.
     return render_template("register.html")
+
+
+def _decode_base64_image(image_data_url):
+    """Shared helper: turns a 'data:image/jpeg;base64,...' string into an
+    OpenCV BGR frame. Returns None if it can't be decoded."""
+    if "," not in image_data_url:
+        return None
+    try:
+        _, encoded = image_data_url.split(",", 1)
+        img_bytes = base64.b64decode(encoded)
+        np_arr = np.frombuffer(img_bytes, np.uint8)
+        return cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    except Exception:
+        return None
+
+
+@app.route("/api/register_user", methods=["POST"])
+@login_required
+def register_user_api():
+    """
+    Browser-camera-based registration. The browser captures several photos
+    (via getUserMedia + canvas, same technique as attendance) and POSTs
+    them here as base64 JPEGs along with the form fields. Works from any
+    device's camera, local or deployed.
+    """
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    roll_no = (data.get("roll_no") or "").strip()
+    email = (data.get("email") or "").strip()
+    images = data.get("images") or []
+
+    if not name or not roll_no:
+        return jsonify({"error": "Name and Roll No are required."}), 400
+
+    if User.query.filter_by(roll_no=roll_no).first():
+        return jsonify({"error": "A user with this roll number already exists."}), 400
+
+    if not images:
+        return jsonify({"error": "No face samples were captured. Try again."}), 400
+
+    frames = []
+    for image_data_url in images:
+        frame = _decode_base64_image(image_data_url)
+        if frame is not None:
+            frames.append(frame)
+
+    if not frames:
+        return jsonify({"error": "Could not decode any captured images."}), 400
+
+    # Optionally save the captured samples to disk, same folder structure
+    # as the old local-webcam flow, purely for record-keeping.
+    save_dir = os.path.join(app.config["FACES_DIR"], roll_no)
+    os.makedirs(save_dir, exist_ok=True)
+    for i, frame in enumerate(frames, start=1):
+        cv2.imwrite(os.path.join(save_dir, f"{roll_no}_{i}.jpg"), frame)
+
+    encoding = generate_encoding_from_frames(frames)
+    if encoding is None:
+        return jsonify({
+            "error": "No face was clearly detected in the captured photos. "
+                     "Try again with better lighting, facing the camera directly."
+        }), 400
+
+    existing_users = User.query.all()
+    duplicate = find_duplicate_face(encoding, existing_users, app.config["RECOGNITION_TOLERANCE"])
+    if duplicate is not None:
+        return jsonify({
+            "error": f"This face is already registered as '{duplicate.name}' "
+                     f"(Roll No: {duplicate.roll_no}). Each person can only be registered once."
+        }), 400
+
+    user = User(name=name, roll_no=roll_no, email=email or None, encoding=encoding)
+    db.session.add(user)
+    db.session.commit()
+
+    return jsonify({"success": True, "message": f"{name} registered successfully with {len(frames)} samples."})
 
 
 # ---------- Live recognition / attendance marking ----------

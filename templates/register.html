@@ -1,25 +1,132 @@
 {% extends "base.html" %}
 {% block title %}Register User{% endblock %}
 {% block content %}
-<h2>Register New User</h2>
-<div class="auth-box">
-    <form method="POST">
+<h2><i class="fa-solid fa-user-plus" style="color: var(--primary);"></i> Register New User</h2>
+
+<div class="auth-box" style="max-width: 480px; margin: 24px 0 0;">
+    <div id="form-step">
         <label>Full Name</label>
-        <input type="text" name="name" required>
+        <input type="text" id="reg-name" required>
 
         <label>Roll No / Employee ID</label>
-        <input type="text" name="roll_no" required>
+        <input type="text" id="reg-roll" required>
 
         <label>Email (optional)</label>
-        <input type="email" name="email">
+        <input type="email" id="reg-email">
 
         <p class="hint">
-            Clicking "Start Capture" opens a webcam window on this server's machine.
-            Look at the camera and slowly turn your head slightly left/right/up/down
-            until the sample count reaches the target. Press "q" to stop early.
+            <i class="fa-solid fa-circle-info"></i>
+            Works from a laptop or phone camera. After filling this in, the
+            camera will capture a few photos automatically — look at the
+            camera and slowly turn your head slightly left/right/up/down.
         </p>
 
-        <button type="submit" class="btn btn-primary">Start Capture &amp; Register</button>
-    </form>
+        <button id="start-btn" class="btn btn-primary" style="width: 100%; justify-content: center;">
+            <i class="fa-solid fa-camera"></i> Start Capture &amp; Register
+        </button>
+    </div>
+
+    <div id="camera-step" style="display: none;">
+        <div class="video-wrap">
+            <video id="reg-cam" autoplay playsinline muted style="width: 100%; display: block;"></video>
+        </div>
+        <p id="capture-status" class="hint" style="text-align: center; font-weight: 600;">Starting camera…</p>
+    </div>
 </div>
+
+<canvas id="reg-canvas" style="display:none;"></canvas>
+
+<div id="toast" class="toast"></div>
+
+<script>
+const SAMPLES_TO_CAPTURE = 10;
+const CAPTURE_INTERVAL_MS = 500;
+
+const formStep = document.getElementById("form-step");
+const cameraStep = document.getElementById("camera-step");
+const startBtn = document.getElementById("start-btn");
+const video = document.getElementById("reg-cam");
+const canvas = document.getElementById("reg-canvas");
+const captureStatus = document.getElementById("capture-status");
+const toast = document.getElementById("toast");
+
+function showToast(message, type) {
+    toast.textContent = message;
+    toast.className = "toast show " + type;
+    setTimeout(() => { toast.className = "toast " + type; }, 4000);
+}
+
+startBtn.addEventListener("click", async () => {
+    const name = document.getElementById("reg-name").value.trim();
+    const roll = document.getElementById("reg-roll").value.trim();
+
+    if (!name || !roll) {
+        showToast("⚠ Please fill in Name and Roll No first", "info");
+        return;
+    }
+
+    formStep.style.display = "none";
+    cameraStep.style.display = "block";
+
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            captureSamples(stream);
+        };
+    } catch (err) {
+        captureStatus.textContent = "Could not access camera: " + err.message;
+    }
+});
+
+async function captureSamples(stream) {
+    const images = [];
+    const ctx = canvas.getContext("2d");
+
+    for (let i = 1; i <= SAMPLES_TO_CAPTURE; i++) {
+        await new Promise(resolve => setTimeout(resolve, CAPTURE_INTERVAL_MS));
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        images.push(canvas.toDataURL("image/jpeg", 0.8));
+        captureStatus.textContent = `Capturing… ${i}/${SAMPLES_TO_CAPTURE}`;
+    }
+
+    stream.getTracks().forEach(track => track.stop());
+    captureStatus.textContent = "Processing…";
+
+    submitRegistration(images);
+}
+
+function submitRegistration(images) {
+    const payload = {
+        name: document.getElementById("reg-name").value.trim(),
+        roll_no: document.getElementById("reg-roll").value.trim(),
+        email: document.getElementById("reg-email").value.trim(),
+        images: images,
+    };
+
+    fetch("{{ url_for('register_user_api') }}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    })
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+            if (ok && data.success) {
+                showToast("✅ " + data.message, "success");
+                setTimeout(() => { window.location.href = "{{ url_for('dashboard') }}"; }, 1500);
+            } else {
+                showToast("⚠ " + (data.error || "Registration failed"), "info");
+                cameraStep.style.display = "none";
+                formStep.style.display = "block";
+            }
+        })
+        .catch(err => {
+            showToast("⚠ Error: " + err.message, "info");
+            cameraStep.style.display = "none";
+            formStep.style.display = "block";
+        });
+}
+</script>
 {% endblock %}

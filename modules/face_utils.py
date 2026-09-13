@@ -76,6 +76,29 @@ def generate_encoding(image_paths):
     return np.mean(encodings, axis=0)
 
 
+def generate_encoding_from_frames(frames):
+    """
+    Same idea as generate_encoding(), but takes a list of already-decoded
+    OpenCV BGR frames (in memory) instead of file paths. Used by the
+    browser-camera registration flow, where images arrive from the
+    client rather than from a local webcam capture.
+    """
+    encodings = []
+    for frame in frames:
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        face_locations = face_recognition.face_locations(rgb)
+        if not face_locations:
+            continue
+        enc = face_recognition.face_encodings(rgb, face_locations)
+        if enc:
+            encodings.append(enc[0])
+
+    if not encodings:
+        return None
+
+    return np.mean(encodings, axis=0)
+
+
 def load_known_encodings(users):
     """
     users: list of User model objects (each has .encoding and .id)
@@ -109,3 +132,24 @@ def recognize_face(frame, known_encodings, known_ids, tolerance=0.5):
             results.append((known_ids[best_match_index], location, confidence))
 
     return results
+
+
+def find_duplicate_face(new_encoding, existing_users, tolerance=0.5):
+    """
+    Checks a newly-captured face encoding against every already-registered
+    user's encoding. Returns the matching User object if this face (or a
+    very similar one) is already registered under a different name/roll_no,
+    otherwise returns None. Used during registration to block accidental
+    double-registration of the same person.
+    """
+    if not existing_users:
+        return None
+
+    known_encodings = [u.encoding for u in existing_users]
+    distances = face_recognition.face_distance(known_encodings, new_encoding)
+    best_match_index = int(np.argmin(distances))
+
+    if distances[best_match_index] <= tolerance:
+        return existing_users[best_match_index]
+
+    return None

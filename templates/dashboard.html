@@ -2,21 +2,35 @@
 {% block title %}Dashboard{% endblock %}
 {% block content %}
 <h2>Dashboard</h2>
+<p class="hint" style="margin-bottom: 24px;">Overview of registrations and today's attendance.</p>
 
 <div class="stats-grid">
     <div class="stat-card">
-        <div class="stat-number">{{ total_users }}</div>
-        <div class="stat-label">Registered Users</div>
+        <div class="stat-icon blue"><i class="fa-solid fa-users"></i></div>
+        <div>
+            <div class="stat-number">{{ total_users }}</div>
+            <div class="stat-label">Registered Users</div>
+        </div>
     </div>
     <div class="stat-card">
-        <div class="stat-number">{{ today_count }}</div>
-        <div class="stat-label">Present Today</div>
+        <div class="stat-icon green"><i class="fa-solid fa-user-check"></i></div>
+        <div>
+            <div class="stat-number">{{ today_count }}</div>
+            <div class="stat-label">Present Today</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon red"><i class="fa-solid fa-user-xmark"></i></div>
+        <div>
+            <div class="stat-number">{{ absent_count }}</div>
+            <div class="stat-label">Absent Today</div>
+        </div>
     </div>
 </div>
 
 <div class="actions">
-    <a href="{{ url_for('take_attendance') }}" class="btn btn-primary">▶ Start Attendance</a>
-    <a href="{{ url_for('register') }}" class="btn">+ Register New User</a>
+    <a href="{{ url_for('take_attendance') }}" class="btn btn-primary"><i class="fa-solid fa-camera"></i> Start Attendance</a>
+    <a href="{{ url_for('register') }}" class="btn"><i class="fa-solid fa-user-plus"></i> Register New User</a>
 </div>
 
 <h3>Recent Attendance</h3>
@@ -31,7 +45,7 @@
             <td>{{ r.roll_no }}</td>
             <td>{{ r.date }}</td>
             <td>{{ r.time_in }}</td>
-            <td><span class="badge">{{ r.status }}</span></td>
+            <td><span class="badge"><i class="fa-solid fa-check"></i> {{ r.status }}</span></td>
         </tr>
         {% else %}
         <tr><td colspan="5">No attendance records yet.</td></tr>

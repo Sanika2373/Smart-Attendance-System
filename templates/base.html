@@ -4,33 +4,65 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Smart Attendance System{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body>
+<body class="{{ 'has-sidebar' if session.logged_in else 'auth-page' }}">
     {% if session.logged_in %}
-    <nav class="navbar">
-        <div class="nav-brand">📸 Smart Attendance</div>
-        <div class="nav-links">
-            <a href="{{ url_for('dashboard') }}">Dashboard</a>
-            <a href="{{ url_for('register') }}">Register User</a>
-            <a href="{{ url_for('take_attendance') }}">Take Attendance</a>
-            <a href="{{ url_for('report') }}">Reports</a>
-            <a href="{{ url_for('users_list') }}">Users</a>
-            <a href="{{ url_for('logout') }}" class="logout">Logout</a>
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <span class="brand-icon"><i class="fa-solid fa-camera-retro"></i></span>
+            <span class="brand-text">Smart Attendance</span>
         </div>
-    </nav>
+        <nav class="sidebar-nav">
+            <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint == 'dashboard' }}">
+                <i class="fa-solid fa-gauge-high"></i> <span>Dashboard</span>
+            </a>
+            <a href="{{ url_for('register') }}" class="{{ 'active' if request.endpoint == 'register' }}">
+                <i class="fa-solid fa-user-plus"></i> <span>Register User</span>
+            </a>
+            <a href="{{ url_for('take_attendance') }}" class="{{ 'active' if request.endpoint == 'take_attendance' }}">
+                <i class="fa-solid fa-camera"></i> <span>Take Attendance</span>
+            </a>
+            <a href="{{ url_for('report') }}" class="{{ 'active' if request.endpoint == 'report' }}">
+                <i class="fa-solid fa-chart-column"></i> <span>Reports</span>
+            </a>
+            <a href="{{ url_for('users_list') }}" class="{{ 'active' if request.endpoint == 'users_list' }}">
+                <i class="fa-solid fa-users"></i> <span>Users</span>
+            </a>
+        </nav>
+        <a href="{{ url_for('logout') }}" class="sidebar-logout">
+            <i class="fa-solid fa-right-from-bracket"></i> <span>Logout</span>
+        </a>
+    </aside>
+    <main class="main-content">
+    {% else %}
+    <main class="main-content-full">
     {% endif %}
 
-    <div class="container">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="flash flash-{{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+        <div class="content-inner">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="flash flash-{{ category }}">
+                            <i class="fa-solid {{ 'fa-circle-check' if category == 'success' else 'fa-circle-exclamation' }}"></i>
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
 
-        {% block content %}{% endblock %}
-    </div>
+            {% block content %}{% endblock %}
+        </div>
+
+        {% if session.logged_in %}
+        <footer class="app-footer">
+            <i class="fa-solid fa-code"></i> Made with <i class="fa-solid fa-heart" style="color: #f9a8d4;"></i> by
+            <span class="footer-name">Sanika</span>
+        </footer>
+        {% endif %}
+    </main>
 </body>
 </html>

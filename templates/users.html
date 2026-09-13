@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Users{% endblock %}
 {% block content %}
-<h2>Registered Users</h2>
+<h2><i class="fa-solid fa-users" style="color: var(--primary);"></i> Registered Users</h2>
 
-<table class="data-table">
+<table class="data-table" style="margin-top: 20px;">
     <thead>
         <tr><th>Name</th><th>Roll No</th><th>Email</th><th>Registered On</th><th></th></tr>
     </thead>
@@ -17,7 +17,7 @@
             <td>
                 <form method="POST" action="{{ url_for('delete_user', user_id=u.id) }}"
                       onsubmit="return confirm('Delete this user?');">
-                    <button type="submit" class="btn btn-danger">Delete</button>
+                    <button type="submit" class="btn btn-danger"><i class="fa-solid fa-trash"></i></button>
                 </form>
             </td>
         </tr>
