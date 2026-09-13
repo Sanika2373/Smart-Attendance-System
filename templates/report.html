@@ -2,14 +2,39 @@
 {% block title %}Reports{% endblock %}
 {% block content %}
 <h2><i class="fa-solid fa-chart-column" style="color: var(--primary);"></i> Attendance Report</h2>
+<p class="hint" style="margin-bottom: 20px;">Every registered user is listed below with their status for the selected date.</p>
 
 <form method="GET" class="filter-form">
-    <label style="margin: 0;">Filter by date:</label>
-    <input type="date" name="date" value="{{ date_filter or '' }}">
-    <button type="submit" class="btn"><i class="fa-solid fa-filter"></i> Filter</button>
-    <a href="{{ url_for('report') }}" class="btn">Clear</a>
-    <a href="{{ url_for('export_report') }}" class="btn btn-primary"><i class="fa-solid fa-download"></i> Export CSV</a>
+    <label style="margin: 0;">Date:</label>
+    <input type="date" name="date" value="{{ date_filter }}">
+    <button type="submit" class="btn"><i class="fa-solid fa-filter"></i> View</button>
+    <a href="{{ url_for('report') }}" class="btn">Today</a>
+    <a href="{{ url_for('export_report', date=date_filter) }}" class="btn btn-primary"><i class="fa-solid fa-download"></i> Export CSV</a>
 </form>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="fa-solid fa-users"></i></div>
+        <div>
+            <div class="stat-number">{{ total_count }}</div>
+            <div class="stat-label">Total Registered</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="fa-solid fa-user-check"></i></div>
+        <div>
+            <div class="stat-number">{{ present_count }}</div>
+            <div class="stat-label">Present</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon red"><i class="fa-solid fa-user-xmark"></i></div>
+        <div>
+            <div class="stat-number">{{ absent_count }}</div>
+            <div class="stat-label">Absent</div>
+        </div>
+    </div>
+</div>
 
 <table class="data-table">
     <thead>
@@ -21,11 +46,17 @@
             <td>{{ r.name }}</td>
             <td>{{ r.roll_no }}</td>
             <td>{{ r.date }}</td>
-            <td>{{ r.time_in }}</td>
-            <td><span class="badge"><i class="fa-solid fa-check"></i> {{ r.status }}</span></td>
+            <td>{{ r.time }}</td>
+            <td>
+                {% if r.status == "Present" %}
+                <span class="badge"><i class="fa-solid fa-check"></i> Present</span>
+                {% else %}
+                <span class="badge badge-absent"><i class="fa-solid fa-xmark"></i> Absent</span>
+                {% endif %}
+            </td>
         </tr>
         {% else %}
-        <tr><td colspan="5">No records found.</td></tr>
+        <tr><td colspan="5">No users registered yet.</td></tr>
         {% endfor %}
     </tbody>
 </table>

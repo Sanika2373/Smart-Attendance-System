@@ -301,34 +301,93 @@ def take_attendance():
 
 # ---------- Reports ----------
 
+def _build_report_rows(selected_date):
+    """
+    Returns (rows, present_count, absent_count, total_count) for the given
+    date. Every registered user gets exactly one row — Present (with time)
+    if they have an attendance entry that date, Absent otherwise. This way
+    the report always reflects the current full list of registered users,
+    even ones who haven't marked attendance yet.
+    """
+    users = User.query.order_by(User.name).all()
+    day_attendance = {
+        a.user_id: a for a in Attendance.query.filter_by(date=selected_date).all()
+    }
+
+    rows = []
+    present_count = 0
+    for user in users:
+        att = day_attendance.get(user.id)
+        if att:
+            present_count += 1
+            rows.append({
+                "name": user.name,
+                "roll_no": user.roll_no,
+                "date": selected_date.strftime("%Y-%m-%d"),
+                "status": "Present",
+                "time": att.time_in.strftime("%H:%M:%S"),
+            })
+        else:
+            rows.append({
+                "name": user.name,
+                "roll_no": user.roll_no,
+                "date": selected_date.strftime("%Y-%m-%d"),
+                "status": "Absent",
+                "time": "-",
+            })
+
+    total_count = len(users)
+    absent_count = total_count - present_count
+    return rows, present_count, absent_count, total_count
+
+
 @app.route("/report")
 @login_required
 def report():
     date_filter = request.args.get("date")
-    query = Attendance.query
-    if date_filter:
-        query = query.filter_by(date=datetime.strptime(date_filter, "%Y-%m-%d").date())
-    records = query.order_by(Attendance.time_in.desc()).all()
-    return render_template("report.html", records=[r.to_dict() for r in records], date_filter=date_filter)
+    selected_date = (
+        datetime.strptime(date_filter, "%Y-%m-%d").date()
+        if date_filter else datetime.utcnow().date()
+    )
+    rows, present_count, absent_count, total_count = _build_report_rows(selected_date)
+    return render_template(
+        "report.html",
+        records=rows,
+        date_filter=selected_date.strftime("%Y-%m-%d"),
+        present_count=present_count,
+        absent_count=absent_count,
+        total_count=total_count,
+    )
 
 
 @app.route("/report/export")
 @login_required
 def export_report():
-    records = Attendance.query.order_by(Attendance.time_in.desc()).all()
-    df = pd.DataFrame([r.to_dict() for r in records])
+    date_filter = request.args.get("date")
+    selected_date = (
+        datetime.strptime(date_filter, "%Y-%m-%d").date()
+        if date_filter else datetime.utcnow().date()
+    )
+    rows, present_count, absent_count, total_count = _build_report_rows(selected_date)
 
-    buffer = io.BytesIO()
+    df = pd.DataFrame(rows, columns=["name", "roll_no", "date", "status", "time"])
+    df.columns = ["Name", "Roll No", "Date", "Status", "Time"]
+
+    buffer = io.StringIO()
+    buffer.write(f"Attendance Report — {selected_date.strftime('%Y-%m-%d')}\n\n")
     df.to_csv(buffer, index=False)
-    buffer.seek(0)
+    buffer.write("\nSummary\n")
+    buffer.write(f"Total Registered Users,{total_count}\n")
+    buffer.write(f"Present,{present_count}\n")
+    buffer.write(f"Absent,{absent_count}\n")
 
+    mem = io.BytesIO(buffer.getvalue().encode("utf-8"))
     return send_file(
-        buffer,
+        mem,
         mimetype="text/csv",
         as_attachment=True,
-        download_name=f"attendance_report_{datetime.utcnow().strftime('%Y%m%d')}.csv",
+        download_name=f"attendance_report_{selected_date.strftime('%Y%m%d')}.csv",
     )
-
 
 # ---------- Users list ----------
 

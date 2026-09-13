@@ -299,6 +299,11 @@ input:focus { outline: none; border-color: var(--primary); }
     display: inline-block;
 }
 
+.badge-absent {
+    background: var(--danger-bg);
+    color: #991b1b;
+}
+
 .filter-form { margin-bottom: 20px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .filter-form input { width: auto; }
 
